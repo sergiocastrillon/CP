@@ -6,7 +6,7 @@ executable:
 	 mpicc main.c -o exec
 
 execute: # Permite correr el ejecutable, solo si antes existe (make executable execute)
-	./exec 1000 C
+	mpirun -np 4 ./exec 1000 C
 
 valgrind: # Generación automática de un informe de valgrind
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-report.txt ./exec
