@@ -25,18 +25,12 @@ int main(int argc, char *argv[]){
         exit(1); 
     }
     
-    
-    
+    MPI_Init(&argc, &argv);
 
     int i, n, count=0;
     char *cadena;
     char L;
 
-    n = atoi(argv[1]);
-    L = *argv[2];
-    
-
-    MPI_Init(&argc, &argv);
 
     int numprocs, rank, namelen;
 
@@ -44,16 +38,14 @@ int main(int argc, char *argv[]){
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); 
 
     if(rank == 0){
+        n = atoi(argv[1]);
+        L = *argv[2];
+
         for(int i = 1; i < numprocs; i++) MPI_Send(&n,1,MPI_INT,i,
         1,MPI_COMM_WORLD); // 1 es el tag
         for(int i = 1; i < numprocs; i++) MPI_Send(&L,1,MPI_CHAR,i,
         1,MPI_COMM_WORLD);
-    }
-
-    if(rank != 0){
-        int n;
-        char L;
-
+    }else{
         MPI_Recv(&n,1,MPI_INT,0,1,MPI_COMM_WORLD,NULL);
         MPI_Recv(&L,1,MPI_CHAR,0,1,MPI_COMM_WORLD,NULL);
     }
@@ -75,9 +67,7 @@ int main(int argc, char *argv[]){
             MPI_Recv(&aux,1,MPI_INT,MPI_ANY_SOURCE,1,MPI_COMM_WORLD,NULL);
             count+= aux;
         }
-    }
-
-    if(rank != 0){
+    }else{
         MPI_Send(&count,1,MPI_INT,0,1,MPI_COMM_WORLD); // 1 es el tag
     }
 
@@ -85,9 +75,7 @@ int main(int argc, char *argv[]){
 
     MPI_Finalize();
 
-    if(rank != 0) exit(0);
-
-    printf("El numero de apariciones de la letra %c es %d\n", L, count);
+    if(rank == 0) printf("El numero de apariciones de la letra %c es %d\n", L, count);
 
     exit(0);
 }
