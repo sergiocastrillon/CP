@@ -1,0 +1,25 @@
+#include <mpi.h>
+
+void MPI_Bcast_binomial(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) {
+    int rank, size;
+    MPI_Comm_rank(comm, &rank);
+    MPI_Comm_size(comm, &size);
+
+    int rounds = (int)(log2(size)) + 1;
+    for (int r = 0; r < rounds; r++) {
+        int distance = (int)pow(2, r);
+        if (rank % distance == 0) {
+            int partner = rank + distance;
+            if (partner < size) {
+                MPI_Send(buffer, count, datatype, partner, 0, comm);
+            }
+        } else {
+            int partner = rank - distance;
+            if (partner < 0) {
+                continue;
+            }
+            MPI_Recv(buffer, count, datatype, partner, 0, comm, MPI_STATUS_IGNORE);
+            break;
+        }
+    }
+}
