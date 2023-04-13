@@ -32,12 +32,13 @@ int root,MPI_Comm comm){
         // Si tu rango es menor que 2 elevado al paso actual - 1 entonces 
         //envias si no recibes
         if(rank < pot){ 
-            if(rank + pot >= numprocs) break; // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
-            MPI_Send(&buff,count,datatype,rank+pot,1,comm);
+            // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
+            if(rank + pot >= numprocs) break;
+            MPI_Send(&buff,count,datatype,rank+pot,404,comm);
             MPI_Send(&i,1,MPI_INT,rank+pot,1,comm);
         }else{
-            MPI_Recv(buff,count,datatype,MPI_ANY_SOURCE,1,comm,NULL);
-            MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,1,comm,NULL);
+            MPI_Recv(buff,count,datatype,MPI_ANY_SOURCE,404,comm,NULL);
+            MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,404,comm,NULL);
         }
     }
 }
@@ -54,16 +55,13 @@ MPI_Op op, int root, MPI_Comm comm){
 	out = MPI_SUCCESS;
 
 	if(rank != root) {
-		out = MPI_Send(buff, count, datatype, root, 1, comm);
+		out = MPI_Send(buff, count, datatype, root, 404, comm);
 	} else {
 		recv = malloc(sizeof(int) * count);
 		memcpy(recvbuff, buff, count * sizeof(int));
 
-		for(int i = 0; i < numprocs; i++) {
-			if(i == root)
-				continue;
-
-			out = MPI_Recv(recv, count, datatype, i, 1, comm, NULL);
+		for(int i = 0; i < numprocs - 1; i++) {
+			out = MPI_Recv(recv, count, datatype, MPI_ANY_SOURCE, 404, comm, NULL);
 
 			for(int j = 0; j < count; j++) {
 				((int *)recvbuff)[j] += recv[j];
