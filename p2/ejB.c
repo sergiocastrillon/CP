@@ -23,7 +23,7 @@ void inicializaCadena(char *cadena, int n){
 
 int MPI_BinomialBcast(void * buff, int count, MPI_Datatype datatype, 
 int root,MPI_Comm comm){
-    int numprocs, rank;
+    int numprocs, rank, err = MPI_SUCCESS;
     MPI_Comm_size(comm, &numprocs);
     MPI_Comm_rank(comm, &rank);
     
@@ -34,44 +34,47 @@ int root,MPI_Comm comm){
         if(rank < pot){ 
             // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
             if(rank + pot >= numprocs) break;
-            MPI_Send(&buff,count,datatype,rank+pot,404,comm);
-            MPI_Send(&i,1,MPI_INT,rank+pot,1,comm);
+            err = MPI_Send(&buff,count,datatype,rank+pot,404,comm);
+            MPI_Send(&i,1,MPI_INT,rank+pot,1,comm); // Los posibles fallos de esta función también
+            // se darían en la anterior así que no hace falta comprobarlo
+            if(err != MPI_SUCCESS) return err;
         }else{
-            MPI_Recv(buff,count,datatype,MPI_ANY_SOURCE,404,comm,NULL);
+            err = MPI_Recv(buff,count,datatype,MPI_ANY_SOURCE,404,comm,NULL);
             MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,404,comm,NULL);
+            if(err != MPI_SUCCESS) return err;
         }
     }
+    return err; // Supuestamente debería ser MPI_SUCCESS
 }
 
 int MPI_FlattreeColectiva(void* buff, void* recvbuff, int count, MPI_Datatype datatype,
 MPI_Op op, int root, MPI_Comm comm){
 
-    int rank, numprocs, out;
+    int rank, numprocs, err = MPI_SUCCESS;
 	int *recv;
 
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &numprocs);
 
-	out = MPI_SUCCESS;
+    // if() falta el control de errores que no hace el send o recv
 
 	if(rank != root) {
-		out = MPI_Send(buff, count, datatype, root, 404, comm);
+		err = MPI_Send(buff, count, datatype, root, 404, comm);
 	} else {
 		recv = malloc(sizeof(int) * count);
 		memcpy(recvbuff, buff, count * sizeof(int));
 
 		for(int i = 0; i < numprocs - 1; i++) {
-			out = MPI_Recv(recv, count, datatype, MPI_ANY_SOURCE, 404, comm, NULL);
-
+			err = MPI_Recv(recv, count, datatype, MPI_ANY_SOURCE, 404, comm, NULL);
+            if(err != MPI_SUCCESS) return err;
 			for(int j = 0; j < count; j++) {
 				((int *)recvbuff)[j] += recv[j];
 			}
 		}
-
-		free(recv);
+        free(recv);
 	}
 
-	return out;
+	return err; // Puede devolver un error si viene del MPI_Send
 
 }
 
