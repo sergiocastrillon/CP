@@ -108,11 +108,11 @@ int main(int argc, char *argv[]){
     int b;
 
 
-    MPI_FlattreeColectiva(&a,&b,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+    //MPI_FlattreeColectiva(&a,&b,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 
-    if(rank == 0) printf("Hola %d\n",b);
-    //MPI_BinomialBcast(&a,1,MPI_INT,0,MPI_COMM_WORLD);
-    //printf("El proceso %d tiene almacenado el numero %d\n",rank,b);
+    //if(rank == 0) printf("Hola %d\n",b);
+    MPI_BinomialBcast(&b,1,MPI_INT,0,MPI_COMM_WORLD);
+    printf("El proceso %d tiene almacenado el numero %d\n",rank,b);
     MPI_Finalize();
 
     exit(0);

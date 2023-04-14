@@ -27,13 +27,17 @@ int root,MPI_Comm comm){
     MPI_Comm_size(comm, &numprocs);
     MPI_Comm_rank(comm, &rank);
     
-    for(int i = 1; pow(2,i-1) <= numprocs; i++){
-        int pot = pow(2,i-1);
+    // Control de errores que no tiene en cuenta el send o recv
+    if(root != 0) return MPI_ERR_ROOT; // Solo funciona para proceso 0
+    int pot;
+    for(int i = 1; (pot = pow(2,i-1)) <= numprocs; i++){
         // Si tu rango es menor que 2 elevado al paso actual - 1 entonces 
         //envias si no recibes
         if(rank < pot){ 
+            /* Sobra está comprobación ??
             // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
-            if(rank + pot >= numprocs) break;
+            //if(rank + pot >= numprocs) break;
+            */
             err = MPI_Send(&buff,count,datatype,rank+pot,404,comm);
             MPI_Send(&i,1,MPI_INT,rank+pot,1,comm); // Los posibles fallos de esta función también
             // se darían en la anterior así que no hace falta comprobarlo
@@ -56,7 +60,10 @@ MPI_Op op, int root, MPI_Comm comm){
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &numprocs);
 
-    // if() falta el control de errores que no hace el send o recv
+    // Control de errores que no tiene en cuenta el send o recv
+    if(op != MPI_SUM) return MPI_ERR_OP;
+    if(datatype != MPI_INT) return MPI_ERR_TYPE;
+    
 
 	if(rank != root) {
 		err = MPI_Send(buff, count, datatype, root, 404, comm);
@@ -124,6 +131,5 @@ int main(int argc, char *argv[]){
     MPI_Finalize();
 
     if(rank == 0) printf("El numero de apariciones de la letra %c es %d\n", L, count_gen);
-
     exit(0);
 }
