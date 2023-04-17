@@ -38,7 +38,7 @@ int root,MPI_Comm comm){
         // Si tu rango es menor que 2 elevado al paso actual - 1 entonces 
         //envias si no recibes
         if(rank < pot){ 
-            if(rank + pot >= numprocs) break; // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
+            if(rank + pot >= numprocs) break; // Garantizamos que no nos pasamos del numero de procesos
             //printf("Proceso %d en iteracion %d mandando a %d\n",rank,i,rank+pot);
             err = MPI_Send(buf,count,datatype,rank+pot,1,comm);
             if(err != MPI_SUCCESS) return err;
@@ -55,7 +55,7 @@ int root,MPI_Comm comm){
 
 
 
-int MPI_FlattreeColectiva(void* buff, void* recvbuff, int count, MPI_Datatype datatype,
+int MPI_FlattreeColectiva(void* buf, void* recvbuff, int count, MPI_Datatype datatype,
 MPI_Op op, int root, MPI_Comm comm){
 
     int rank, numprocs, err = MPI_SUCCESS;
@@ -70,10 +70,10 @@ MPI_Op op, int root, MPI_Comm comm){
     
 
 	if(rank != root) {
-		err = MPI_Send(buff, count, datatype, root, 404, comm);
+		err = MPI_Send(buf, count, datatype, root, 404, comm);
 	} else {
 		recv = malloc(sizeof(int) * count);
-		memcpy(recvbuff, buff, count * sizeof(int));
+		memcpy(recvbuff, buf, count * sizeof(int));
 
 		for(int i = 0; i < numprocs - 1; i++) {
 			err = MPI_Recv(recv, count, datatype, MPI_ANY_SOURCE, 404, comm, NULL);
