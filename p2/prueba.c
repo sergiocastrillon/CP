@@ -5,7 +5,7 @@
 #include <string.h>
 
 
-void MPI_BinomialBcast(void * buf, int count, MPI_Datatype datatype, 
+void MPI_BinomialBcast2(void * buf, int count, MPI_Datatype datatype, 
 int root,MPI_Comm comm){
     int numprocs, rank;
     MPI_Comm_size(comm, &numprocs);
@@ -24,8 +24,8 @@ int root,MPI_Comm comm){
         } // && pot < numprocs
         else{
             //printf("Proceso %d en iteracion %d esperando para recibir\n",rank,i);
-            MPI_Recv(buf,count,datatype,MPI_ANY_SOURCE,1,comm,NULL);
-            MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,1,comm,NULL);
+            MPI_Recv(buf,count,datatype,MPI_ANY_SOURCE,1,comm,MPI_STATUS_IGNORE);
+            MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,1,comm,MPI_STATUS_IGNORE);
         }
     }
 }
@@ -33,26 +33,57 @@ int root,MPI_Comm comm){
 
 
 
-void MPI_Bcast_binomial(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) {
-    int rank, size;
-    MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &size);
+int MPI_BinomialBcast53(void *buff, int count, MPI_Datatype dtype, int root, MPI_Comm comm) {
+	int numprocs, rank, err, pot;
 
-    int rounds = (int)(log2(size)) + 1;
-    for (int r = 0; r < rounds; r++) {
-        int distance = (int)pow(2, r);
-        if (rank % distance == 0) {
-            int partner = rank + distance;
-            if (partner < size) {
-                MPI_Send(buffer, count, datatype, partner, 0, comm);
-            }
-        } else {
-            int partner = rank - distance;
-            if (partner < 0) {
-                continue;
-            }
-            MPI_Recv(buffer, count, datatype, partner, 0, comm, MPI_STATUS_IGNORE);
-            break;
+	MPI_Comm_size(comm, &numprocs);
+	MPI_Comm_rank(comm, &rank);
+
+   
+    err = MPI_SUCCESS;
+
+    // Si no eres el proceso 0 recibes
+	if(rank > 0)
+		err= MPI_Recv(buff, count, dtype, MPI_ANY_SOURCE, 33, comm, MPI_STATUS_IGNORE);
+
+	for(int i=1; ; i++){
+        pot = pow(2,i);
+        
+
+		if(rank < i){
+			if(pot +rank >= numprocs) break;
+			err = MPI_Send(&rank, count, dtype, rank + pot, 33, comm);
+            if(err != MPI_SUCCESS) return err;
+		}
+	}
+}
+
+
+
+int MPI_BinomialBcast(void * buf, int count, MPI_Datatype datatype, 
+int root,MPI_Comm comm){
+    int numprocs, rank, err;
+    MPI_Comm_size(comm, &numprocs);
+    MPI_Comm_rank(comm, &rank);
+
+    err = MPI_SUCCESS;
+
+    for(int i = 1; pow(2,i-1) < numprocs; i++){
+        int copy = rank;
+        int pot = pow(2,i-1);
+        // Si tu rango es menor que 2 elevado al paso actual - 1 entonces 
+        //envias si no recibes
+        if(rank < pot){ 
+            if(rank + pot >= numprocs) break; // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
+            //printf("Proceso %d en iteracion %d mandando a %d\n",rank,i,rank+pot);
+            err = MPI_Send(&rank,count,datatype,rank+pot,1,comm);
+            if(err != MPI_SUCCESS) return err;
+            MPI_Send(&i,1,MPI_INT,rank+pot,1,comm); // Sincronizacion del paso
+        }else{
+            //printf("Proceso %d en iteracion %d esperando para recibir\n",rank,i);
+            err = MPI_Recv(buf,count,datatype,MPI_ANY_SOURCE,1,comm,NULL);
+            MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,1,comm,NULL); // Sincronizacion del paso
+            if(err != MPI_SUCCESS) return err;
         }
     }
 }

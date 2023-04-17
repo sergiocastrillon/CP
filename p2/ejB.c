@@ -21,35 +21,39 @@ void inicializaCadena(char *cadena, int n){
 }
 
 
-int MPI_BinomialBcast(void * buff, int count, MPI_Datatype datatype, 
+int MPI_BinomialBcast(void * buf, int count, MPI_Datatype datatype, 
 int root,MPI_Comm comm){
-    int numprocs, rank, err = MPI_SUCCESS;
+    int numprocs, rank, err;
     MPI_Comm_size(comm, &numprocs);
     MPI_Comm_rank(comm, &rank);
-    
+
+    err = MPI_SUCCESS;
+
     // Control de errores que no tiene en cuenta el send o recv
     if(root != 0) return MPI_ERR_ROOT; // Solo funciona para proceso 0
+
     int pot;
-    for(int i = 1; (pot = pow(2,i-1)) <= numprocs; i++){
+    for(int i = 1; (pot = pow(2,i-1)) < numprocs; i++){
+        int copy = rank;
         // Si tu rango es menor que 2 elevado al paso actual - 1 entonces 
         //envias si no recibes
         if(rank < pot){ 
-            /* Sobra está comprobación ??
-            // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
-            //if(rank + pot >= numprocs) break;
-            */
-            err = MPI_Send(&buff,count,datatype,rank+pot,404,comm);
-            MPI_Send(&i,1,MPI_INT,rank+pot,1,comm); // Los posibles fallos de esta función también
-            // se darían en la anterior así que no hace falta comprobarlo
+            if(rank + pot >= numprocs) break; // Para no multiplos de 2 si te pasas del numero de procesos rompe el bucle
+            //printf("Proceso %d en iteracion %d mandando a %d\n",rank,i,rank+pot);
+            err = MPI_Send(buf,count,datatype,rank+pot,1,comm);
             if(err != MPI_SUCCESS) return err;
+            MPI_Send(&i,1,MPI_INT,rank+pot,1,comm); // Sincronizacion del paso
         }else{
-            err = MPI_Recv(buff,count,datatype,MPI_ANY_SOURCE,404,comm,NULL);
-            MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,404,comm,NULL);
+            //printf("Proceso %d en iteracion %d esperando para recibir\n",rank,i);
+            err = MPI_Recv(buf,count,datatype,MPI_ANY_SOURCE,1,comm,NULL);
+            MPI_Recv(&i,1,MPI_INT,MPI_ANY_SOURCE,1,comm,NULL); // Sincronizacion del paso
             if(err != MPI_SUCCESS) return err;
         }
     }
-    return err; // Supuestamente debería ser MPI_SUCCESS
+    return err; // Se espera que sea SUCCESS
 }
+
+
 
 int MPI_FlattreeColectiva(void* buff, void* recvbuff, int count, MPI_Datatype datatype,
 MPI_Op op, int root, MPI_Comm comm){
@@ -104,13 +108,15 @@ int main(int argc, char *argv[]){
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); 
 
+    // Realmente el if no hace falta pero garantiza que solo el 0 recibe los argumentos
+    // y que por tanto la función envía y recibe bien
     if(rank == 0){
         n = atoi(argv[1]);
         L = *argv[2];
     }
     
-    MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
-    MPI_Bcast(&L,1,MPI_CHAR,0,MPI_COMM_WORLD);
+    MPI_BinomialBcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
+    MPI_BinomialBcast(&L,1,MPI_CHAR,0,MPI_COMM_WORLD);
     //printf("Proceso %d tiene %d y %c\n",rank,n,L);
     
     cadena = (char *) malloc(n*sizeof(char));
