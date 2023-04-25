@@ -3,7 +3,7 @@
 #include <sys/time.h>
 #include <mpi.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 /* Translation of the DNA bases
    A -> 0
@@ -12,7 +12,7 @@
    T -> 3
    N -> 4*/
 
-#define M  100 // Number of sequences
+#define M  10000 // Number of sequences
 #define N  200  // Number of bases per sequence
 
 unsigned int g_seed = 0;
@@ -54,28 +54,42 @@ int base_distance(int base1, int base2){
 
 int main(int argc, char *argv[] ) {
 
+
+  MPI_Init(&argc,&argv);
+
   int i, j;
   int *data1, *data2;
   int *result;
   struct timeval  tv1, tv2;
   
-
-  MPI_Init(&argc,&argv);
-
   int *datar1, *datar2;
 
   int numprocs, rank;
   MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+  int* sendcounts = malloc(numprocs * sizeof(int));
+  int* recvcounts = malloc(numprocs * sizeof(int));
+
+
+  // displs indica el desplazamiento en elementos, es decir si displs[1] = 2 y arr
+  // tiene 4 elementos quiere decir que el proceso 1 recibirá arr[2] y arr[3];
+  int* displs = malloc(numprocs * sizeof(int));
+  int* gatherdispls = malloc(numprocs * sizeof(int));
+
+  int filas_p_proc = M / numprocs; // Número de filas por proceso
+  int resto = M % numprocs; // Filas sobrantes
+
+  int recvcount;
   
+  int* proresult = (int *) malloc((filas_p_proc)*sizeof(int)); // Resultado individual de cada proceso
+
+  data1 = (int *) malloc(M*N*sizeof(int));
+  data2 = (int *) malloc(M*N*sizeof(int));
+  result = (int *) malloc(M*sizeof(int));
+
 
   if(rank == 0){
-
-    data1 = (int *) malloc(M*N*sizeof(int));
-    data2 = (int *) malloc(M*N*sizeof(int));
-    result = (int *) malloc(M*sizeof(int));
-
     /* Initialize Matrices */
     for(i=0;i<M;i++) { // i indica la columna y j la fila
       for(j=0;j<N;j++) {
@@ -90,17 +104,7 @@ int main(int argc, char *argv[] ) {
 
   
 
-  int* sendcounts = malloc(numprocs * sizeof(int));
-  int* recvcounts = malloc(numprocs * sizeof(int));
-
-  int* displs = malloc(numprocs * sizeof(int));
-  int* rdispls = malloc(numprocs * sizeof(int));
-
-  int filas_p_proc = M / numprocs; // Número de filas por proceso
-  int resto = M % numprocs; // Filas sobrantes
-
-  int recvcount;
-  int* resultr = (int *) malloc((filas_p_proc)*sizeof(int));
+  
 
 
   if(rank < resto){
@@ -116,49 +120,64 @@ int main(int argc, char *argv[] ) {
   
 
   for (int i = 0; i < numprocs; i++) {
+    // Cada proceso recibe filas_p_proc * N elementos y debe devolver un elemento por fila
     sendcounts[i] = filas_p_proc*N;
     recvcounts[i] = filas_p_proc;
 
-    if (i < resto){
+    if (i < resto){ // Mandamos el resto a los primeros "resto" procesos
       sendcounts[i] = sendcounts[i] + N;
       recvcounts[i] = recvcounts[i] + 1;
     } 
-    // displs indica el desplazamiento en elementos, es decir si displs[1] = 2 y arr
-    // tiene 4 elementos quiere decir que el proceso 1 recibirá arr[2] y arr[3];
-
+    
+    // displs se calcula en base a sendcounts
     if(i > 0){
       displs[i] = displs[i-1] + sendcounts[i-1];
-      rdispls[i] = rdispls[i-1] + recvcounts[i-1];
+      gatherdispls[i] = gatherdispls[i-1] + recvcounts[i-1];
     } 
     else{
+      // El proceso 0 recibe los primeros elementos
       displs[i] = 0;
-      rdispls[i] = 0;
+      gatherdispls[i] = 0;
     } 
     // Si el proceso es el 0 empiezas en el principio si no coges el desplazamiento del
     // anterior y se lo sumas a donde empezó ese proceso anterior 
   }
 
+  // Recibimos las filas con las que operar
+  gettimeofday(&tv1, NULL);
 
-  printf("Proceso %d tiene rdispls = %d\n",rank,rdispls[rank]);
   MPI_Scatterv(data1,sendcounts,displs,MPI_INT,datar1,recvcount,MPI_INT,0,MPI_COMM_WORLD);
   MPI_Scatterv(data2,sendcounts,displs,MPI_INT,datar2,recvcount,MPI_INT,0,MPI_COMM_WORLD);
 
+  gettimeofday(&tv2, NULL);
+
+  int commTime = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
 
   gettimeofday(&tv1, NULL);
 
   for(i=0;i<(recvcounts[rank]);i++) {
-    resultr[i]=0;
+    proresult[i]=0;
     for(j=0;j<N;j++) {
-      resultr[i] += base_distance(datar1[i*N+j], datar2[i*N+j]);
+      proresult[i] += base_distance(datar1[i*N+j], datar2[i*N+j]);
     }
-    printf("%d en fila %d proceso %d\n",resultr[i],i,rank);
   }
 
   gettimeofday(&tv2, NULL);
     
-  int microseconds = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
+  int procTime = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
 
-  MPI_Gatherv(resultr,recvcounts[rank],MPI_INT,result,recvcounts,rdispls,MPI_INT,0,MPI_COMM_WORLD);
+  gettimeofday(&tv1, NULL);
+  // Devolvemos los resultados
+  MPI_Gatherv(proresult,recvcounts[rank],MPI_INT,result,recvcounts,gatherdispls,MPI_INT,0,MPI_COMM_WORLD);
+  gettimeofday(&tv2, NULL);
+
+  commTime = commTime + (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
+  
+
+  if(DEBUG != 1 && DEBUG != 2){
+    printf ("Processing time of process %d (seconds) = %lf\n", rank, (double) procTime/1E6);
+    printf("Communication time of process %d (seconds) = %lf\n", rank, (double) commTime/1E6);
+  }
 
   if(rank == 0){
     /* Display result */
@@ -172,16 +191,21 @@ int main(int argc, char *argv[] ) {
       for(i=0;i<M;i++) {
         printf(" %d \t ",result[i]);
       }
-    } else {
-      printf ("Time (seconds) = %lf\n", (double) microseconds/1E6);
-    }    
+    }
   }
-  
 
-  free(data1); free(data2); free(result);
+
+  free(data1); 
+  free(data2); 
+  free(result);
+  free(sendcounts);
+  free(recvcounts);
+  free(datar1);
+  free(datar2);
 
   MPI_Finalize();
-
   return 0;
 }
-
+  
+  
+  
