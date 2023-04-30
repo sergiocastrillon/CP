@@ -3,7 +3,7 @@
 #include <sys/time.h>
 #include <mpi.h>
 
-#define DEBUG 0
+#define DEBUG 1
 
 /* Translation of the DNA bases
    A -> 0
@@ -14,6 +14,9 @@
 
 #define M  10000 // Number of sequences
 #define N  200  // Number of bases per sequence
+
+//#define M 10
+//#define N 3
 
 unsigned int g_seed = 0;
 
@@ -80,16 +83,16 @@ int main(int argc, char *argv[] ) {
   int filas_p_proc = M / numprocs; // Número de filas por proceso
   int resto = M % numprocs; // Filas sobrantes
 
-  int recvcount;
-  
-  int* proresult = (int *) malloc((filas_p_proc)*sizeof(int)); // Resultado individual de cada proceso
+  int sendcount;
 
-  data1 = (int *) malloc(M*N*sizeof(int));
-  data2 = (int *) malloc(M*N*sizeof(int));
-  result = (int *) malloc(M*sizeof(int));
+  
 
 
   if(rank == 0){
+
+    data1 = (int *) malloc(M*N*sizeof(int));
+    data2 = (int *) malloc(M*N*sizeof(int));
+    result = (int *) malloc(M*sizeof(int));
     /* Initialize Matrices */
     for(i=0;i<M;i++) { // i indica la columna y j la fila
       for(j=0;j<N;j++) {
@@ -107,19 +110,22 @@ int main(int argc, char *argv[] ) {
   
 
 
-  if(rank < resto){
-    recvcount = (filas_p_proc + 1)*N;
-    datar1 = (int *) malloc(recvcount*sizeof(int));
-    datar2 = (int *) malloc(recvcount*sizeof(int));
-    
-  }else{
-    recvcount = filas_p_proc*N;
-    datar1 = (int *) malloc((recvcount)*sizeof(int));
-    datar2 = (int *) malloc((recvcount)*sizeof(int));
-  }
-  
+  if(rank < resto) sendcount = (filas_p_proc + 1)*N;
+  else sendcount = filas_p_proc*N;
 
-  for (int i = 0; i < numprocs; i++) {
+  if(rank != 0){ // Si rango no es 0 entonces reservas del tamaño correspondiente
+    data1 = (int *) malloc((sendcount)*sizeof(int));
+    data2 = (int *) malloc((sendcount)*sizeof(int));
+    result = (int *) malloc((sendcount/N)*sizeof(int));
+
+    // Inicializamos recvcounts[rank] en cada proceso para el Gatherv
+    recvcounts[rank] = filas_p_proc;
+    if(rank < resto) recvcounts[rank] = recvcounts[rank] + 1;
+
+  }else{ 
+    // Solo el 0 necesita estos datos asi que ahorramos computación el el resto de procesos
+
+    for (int i = 0; i < numprocs; i++) {
     // Cada proceso recibe filas_p_proc * N elementos y debe devolver un elemento por fila
     sendcounts[i] = filas_p_proc*N;
     recvcounts[i] = filas_p_proc;
@@ -143,11 +149,16 @@ int main(int argc, char *argv[] ) {
     // anterior y se lo sumas a donde empezó ese proceso anterior 
   }
 
+  }
+  
+
+  
+
   // Recibimos las filas con las que operar
   gettimeofday(&tv1, NULL);
 
-  MPI_Scatterv(data1,sendcounts,displs,MPI_INT,datar1,recvcount,MPI_INT,0,MPI_COMM_WORLD);
-  MPI_Scatterv(data2,sendcounts,displs,MPI_INT,datar2,recvcount,MPI_INT,0,MPI_COMM_WORLD);
+  MPI_Scatterv(data1,sendcounts,displs,MPI_INT,data1,sendcount,MPI_INT,0,MPI_COMM_WORLD);
+  MPI_Scatterv(data2,sendcounts,displs,MPI_INT,data2,sendcount,MPI_INT,0,MPI_COMM_WORLD);
 
   gettimeofday(&tv2, NULL);
 
@@ -156,9 +167,9 @@ int main(int argc, char *argv[] ) {
   gettimeofday(&tv1, NULL);
 
   for(i=0;i<(recvcounts[rank]);i++) {
-    proresult[i]=0;
+    result[i]=0;
     for(j=0;j<N;j++) {
-      proresult[i] += base_distance(datar1[i*N+j], datar2[i*N+j]);
+      result[i] += base_distance(data1[i*N+j], data2[i*N+j]);
     }
   }
 
@@ -168,7 +179,7 @@ int main(int argc, char *argv[] ) {
 
   gettimeofday(&tv1, NULL);
   // Devolvemos los resultados
-  MPI_Gatherv(proresult,recvcounts[rank],MPI_INT,result,recvcounts,gatherdispls,MPI_INT,0,MPI_COMM_WORLD);
+  MPI_Gatherv(result,recvcounts[rank],MPI_INT,result,recvcounts,gatherdispls,MPI_INT,0,MPI_COMM_WORLD);
   gettimeofday(&tv2, NULL);
 
   commTime = commTime + (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
@@ -200,8 +211,6 @@ int main(int argc, char *argv[] ) {
   free(result);
   free(sendcounts);
   free(recvcounts);
-  free(datar1);
-  free(datar2);
 
   MPI_Finalize();
   return 0;
