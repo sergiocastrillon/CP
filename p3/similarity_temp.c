@@ -12,7 +12,7 @@
    T -> 3
    N -> 4*/
 
-#define M  1000000 // Number of sequences
+#define M  10000 // Number of sequences
 #define N  200  // Number of bases per sequence
 
 //#define M 10
@@ -64,13 +64,12 @@ int main(int argc, char *argv[] ) {
   int *data1, *data2;
   int *result;
   struct timeval  tv1, tv2;
-
+  
+  int *datar1, *datar2;
 
   int numprocs, rank;
   MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-  int comp_temps[numprocs], comm_temps[numprocs];
 
   int* sendcounts = malloc(numprocs * sizeof(int));
   int* recvcounts = malloc(numprocs * sizeof(int));
@@ -103,6 +102,11 @@ int main(int argc, char *argv[] ) {
       }
     }
   }
+  
+
+
+  
+
   
 
 
@@ -149,7 +153,7 @@ int main(int argc, char *argv[] ) {
   
 
   
-  // MPI_Barrier(MPI_COMM_WORLD); // Para hacer comprobaciones de los tiempos
+
   // Recibimos las filas con las que operar
   gettimeofday(&tv1, NULL);
 
@@ -161,17 +165,18 @@ int main(int argc, char *argv[] ) {
   int commTime = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
 
   gettimeofday(&tv1, NULL);
+
   for(i=0;i<(recvcounts[rank]);i++) {
     result[i]=0;
     for(j=0;j<N;j++) {
       result[i] += base_distance(data1[i*N+j], data2[i*N+j]);
     }
   }
+
   gettimeofday(&tv2, NULL);
     
   int procTime = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
 
-  // MPI_Barrier(MPI_COMM_WORLD); // Para hacer comprobaciones de los tiempos
   gettimeofday(&tv1, NULL);
   // Devolvemos los resultados
   MPI_Gatherv(result,recvcounts[rank],MPI_INT,result,recvcounts,gatherdispls,MPI_INT,0,MPI_COMM_WORLD);
@@ -179,10 +184,11 @@ int main(int argc, char *argv[] ) {
 
   commTime = commTime + (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
   
-  // Recopilamos los tiempos en el proceso 0
-  MPI_Gather(&procTime,1,MPI_INT,comp_temps,1,MPI_INT,0,MPI_COMM_WORLD);
-  MPI_Gather(&commTime,1,MPI_INT,comm_temps,1,MPI_INT,0,MPI_COMM_WORLD);
 
+  if(DEBUG != 1 && DEBUG != 2){
+    printf ("Processing time of process %d (seconds) = %lf\n", rank, (double) procTime/1E6);
+    printf("Communication time of process %d (seconds) = %lf\n", rank, (double) commTime/1E6);
+  }
 
   if(rank == 0){
     /* Display result */
@@ -195,12 +201,6 @@ int main(int argc, char *argv[] ) {
     } else if (DEBUG == 2) {
       for(i=0;i<M;i++) {
         printf(" %d \t ",result[i]);
-      }
-    }else{
-      for(int i = 0; i < numprocs; i++){
-        printf("Process %d -- Computing time: %lf (seconds)", i, (double) comp_temps[i]/1E6);
-        printf(" Communication time: %lf (seconds)",(double) comm_temps[i]/1E6);
-        printf(" Total time: %lf (seconds)\n", (double) (comp_temps[i] + comm_temps[i])/1E6);
       }
     }
   }
