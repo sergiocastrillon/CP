@@ -12,8 +12,8 @@
    T -> 3
    N -> 4*/
 
-#define M  1000000 // Number of sequences
-#define N  200
+#define M  31 // Number of sequences
+#define N  20
 
 //#define M 10
 //#define N 3
@@ -85,11 +85,9 @@ int main(int argc, char *argv[] ) {
 
   int sendcount;
 
-  
 
 
   if(rank == 0){
-
     data1 = (int *) malloc(M*N*sizeof(int));
     data2 = (int *) malloc(M*N*sizeof(int));
     result = (int *) malloc(M*sizeof(int));
@@ -102,12 +100,8 @@ int main(int argc, char *argv[] ) {
       }
     }
   }
-  
 
 
-  
-
-  
 
 
   if(rank < resto) sendcount = (filas_p_proc + 1)*N;
@@ -205,7 +199,7 @@ int main(int argc, char *argv[] ) {
       procAvg = procAvg / numprocs; commAvg = commAvg / numprocs;
       printf("\n--\nAverage computing time: %lf (seconds)\n", i, (double) procAvg/1E6);
       printf("Average communication time: %lf (seconds)\n",(double) commAvg/1E6);
-      printf("Total average time: %lf (seconds)\n--\n", (double) ((procAvg + commAvg)/2/1E6));
+      printf("Total average time: %lf (seconds)\n--\n", (double) (procAvg + commAvg)/1E6);
     }
   }
 
